@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Machine, Event, WorkOrder, ECO, Component, MachineSetting, ProductionData, Document, MachineStatus } from '../../types/green-room';
 import * as api from '../../utils/api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -17,6 +17,8 @@ import { UploadDocumentDialog } from '../dialogs/UploadDocumentDialog';
 import { AddNoteDialog } from '../dialogs/AddNoteDialog';
 import { LogEventDialog } from '../dialogs/LogEventDialog';
 import { CreateECODialog } from '../dialogs/CreateECODialog';
+import { useAlerts } from '@/providers/AlertProvider';
+import { AlertCard } from '../alerts/AlertCard';
 import { 
   ArrowLeft, 
   FileUp, 
@@ -103,6 +105,11 @@ export function MachineDetailsPage({ machine, onBack, onMachineUpdated }: Machin
   const [addNoteDialogOpen, setAddNoteDialogOpen] = useState(false);
   const [logEventDialogOpen, setLogEventDialogOpen] = useState(false);
   const [createECODialogOpen, setCreateECODialogOpen] = useState(false);
+  const { alerts } = useAlerts();
+  const machineAlerts = useMemo(
+    () => alerts.filter(alert => alert.relatedMachines?.includes(machine.id)),
+    [alerts, machine.id],
+  );
 
   useEffect(() => {
     async function loadData() {
@@ -415,6 +422,17 @@ export function MachineDetailsPage({ machine, onBack, onMachineUpdated }: Machin
               <p className="text-sm">{machineDetails.commissionedDate || 'N/A'}</p>
             </div>
           </div>
+
+          {machineAlerts.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-foreground">Active Alerts</h3>
+              <div className="space-y-2">
+                {machineAlerts.map(alert => (
+                  <AlertCard key={alert.id} alert={alert} />
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* KPIs */}
           <div className="flex gap-6">

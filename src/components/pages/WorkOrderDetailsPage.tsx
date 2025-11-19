@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { WorkOrder } from '../../types/green-room';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -8,6 +9,8 @@ import { ScrollArea } from '../ui/scroll-area';
 import { ArrowLeft, ClipboardList, Calendar, User, AlertTriangle, CheckCircle2, Clock, FileText, Paperclip, Link2, Download, Package, Activity } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { toast } from 'sonner';
+import { useAlerts } from '@/providers/AlertProvider';
+import { AlertCard } from '../alerts/AlertCard';
 
 interface WorkOrderDetailsPageProps {
   workOrder: WorkOrder;
@@ -22,6 +25,12 @@ export function WorkOrderDetailsPage({ workOrder, onBack }: WorkOrderDetailsPage
     priority === 'critical' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-muted text-foreground border-border';
 
   const getTypeColor = (_type: WorkOrder['type']) => 'bg-muted text-foreground border-border';
+
+  const { alerts } = useAlerts();
+  const workOrderAlerts = useMemo(
+    () => alerts.filter(alert => alert.relatedWorkOrders?.includes(workOrder.id)),
+    [alerts, workOrder.id],
+  );
 
   const generatePDFReport = () => {
     const doc = new jsPDF();
@@ -349,6 +358,17 @@ export function WorkOrderDetailsPage({ workOrder, onBack }: WorkOrderDetailsPage
               )}
             </div>
           </div>
+
+          {workOrderAlerts.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-foreground">Active Alerts</h3>
+              <div className="space-y-2">
+                {workOrderAlerts.map(alert => (
+                  <AlertCard key={alert.id} alert={alert} />
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Quick Actions */}
           <div className="flex gap-2">

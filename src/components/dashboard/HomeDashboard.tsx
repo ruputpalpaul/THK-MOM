@@ -1,15 +1,20 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as api from '@/utils/api';
 import { ECO, Event, Machine, ProductionData, WorkOrder } from '@/types/green-room';
+import type { PlantAreaKey } from '@/types/auth';
 import { Card } from '@/components/ui/card';
 import { StatusTile } from './StatusTile';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, BarChart3, Factory, FileText, Server, Wrench, Activity, TrendingUp, Package, Layers } from 'lucide-react';
 
-type PlantAreaKey = 'home' | 'production' | 'green-room' | 'fabrication' | 'shipping';
-
-export function HomeDashboard({ onSelectArea }: { onSelectArea?: (area: PlantAreaKey) => void } = {}) {
+export function HomeDashboard({
+	onSelectArea,
+	isAreaEnabled,
+}: {
+	onSelectArea?: (area: PlantAreaKey) => void;
+	isAreaEnabled?: (area: PlantAreaKey) => boolean;
+} = {}) {
 	const [machines, setMachines] = useState<Machine[]>([]);
 	const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
 	const [ecos, setECOs] = useState<ECO[]>([]);
@@ -106,6 +111,8 @@ export function HomeDashboard({ onSelectArea }: { onSelectArea?: (area: PlantAre
 				'green-room': [],
 				'fabrication': [],
 				'shipping': [],
+				'machines': [],
+				'tool-life': [],
 			};
 			for (const m of machines) {
 				const a = classifyArea(m);
@@ -116,17 +123,22 @@ export function HomeDashboard({ onSelectArea }: { onSelectArea?: (area: PlantAre
 			return map;
 		}, [machines]);
 
-		const makeAreaStats = (list: Machine[]) => {
-			const total = list.length;
-			const active = list.filter(m => m.status === 'active').length;
-			const down = list.filter(m => m.status === 'down').length;
-			const maintenance = list.filter(m => m.status === 'maintenance').length;
-			const todayTarget = list.reduce((a, m) => a + (m.todayTarget || 0), 0);
-			const todayActual = list.reduce((a, m) => a + (m.todayActual || 0), 0);
-			const todayScrap = list.reduce((a, m) => a + (m.todayScrap || 0), 0);
-			const attainment = todayTarget ? Math.round((todayActual / todayTarget) * 100) : 0;
-			return { total, active, down, maintenance, todayTarget, todayActual, todayScrap, attainment };
-		};
+	const makeAreaStats = (list: Machine[]) => {
+		const total = list.length;
+		const active = list.filter(m => m.status === 'active').length;
+		const down = list.filter(m => m.status === 'down').length;
+		const maintenance = list.filter(m => m.status === 'maintenance').length;
+		const todayTarget = list.reduce((a, m) => a + (m.todayTarget || 0), 0);
+		const todayActual = list.reduce((a, m) => a + (m.todayActual || 0), 0);
+		const todayScrap = list.reduce((a, m) => a + (m.todayScrap || 0), 0);
+		const attainment = todayTarget ? Math.round((todayActual / todayTarget) * 100) : 0;
+		return { total, active, down, maintenance, todayTarget, todayActual, todayScrap, attainment };
+	};
+
+	const canOpenArea = useCallback(
+		(area: PlantAreaKey) => (isAreaEnabled ? isAreaEnabled(area) : true),
+		[isAreaEnabled],
+	);
 
 	if (loading) {
 		return (
@@ -155,7 +167,18 @@ export function HomeDashboard({ onSelectArea }: { onSelectArea?: (area: PlantAre
 						<div className="flex items-center gap-3 mb-4">
 							<Layers className="w-5 h-5 text-primary" />
 							<h3 className="text-lg font-semibold">Production Overview</h3>
-							<div className="ml-auto"><Button variant="outline" size="sm" onClick={() => onSelectArea?.('production')}>Open</Button></div>
+							<div className="ml-auto">
+								<Button
+									variant="outline"
+									size="sm"
+									disabled={!canOpenArea('production')}
+									onClick={() => {
+										if (canOpenArea('production')) onSelectArea?.('production');
+									}}
+								>
+									Open
+								</Button>
+							</div>
 						</div>
 						<AreaStats {...makeAreaStats(byArea['production'])} />
 					</Card>
@@ -163,7 +186,18 @@ export function HomeDashboard({ onSelectArea }: { onSelectArea?: (area: PlantAre
 						<div className="flex items-center gap-3 mb-4">
 							<Factory className="w-5 h-5 text-blue-600" />
 							<h3 className="text-lg font-semibold">Fabrication</h3>
-							<div className="ml-auto"><Button variant="outline" size="sm" onClick={() => onSelectArea?.('fabrication')}>View</Button></div>
+							<div className="ml-auto">
+								<Button
+									variant="outline"
+									size="sm"
+									disabled={!canOpenArea('fabrication')}
+									onClick={() => {
+										if (canOpenArea('fabrication')) onSelectArea?.('fabrication');
+									}}
+								>
+									View
+								</Button>
+							</div>
 						</div>
 						<AreaStats {...makeAreaStats(byArea['fabrication'])} />
 					</Card>
@@ -171,7 +205,18 @@ export function HomeDashboard({ onSelectArea }: { onSelectArea?: (area: PlantAre
 						<div className="flex items-center gap-3 mb-4">
 							<Factory className="w-5 h-5 text-emerald-600" />
 							<h3 className="text-lg font-semibold">Green Room</h3>
-							<div className="ml-auto"><Button variant="outline" size="sm" onClick={() => onSelectArea?.('green-room')}>View</Button></div>
+							<div className="ml-auto">
+								<Button
+									variant="outline"
+									size="sm"
+									disabled={!canOpenArea('green-room')}
+									onClick={() => {
+										if (canOpenArea('green-room')) onSelectArea?.('green-room');
+									}}
+								>
+									View
+								</Button>
+							</div>
 						</div>
 						<AreaStats {...makeAreaStats(byArea['green-room'])} />
 					</Card>
@@ -179,7 +224,18 @@ export function HomeDashboard({ onSelectArea }: { onSelectArea?: (area: PlantAre
 						<div className="flex items-center gap-3 mb-4">
 							<Package className="w-5 h-5 text-orange-600" />
 							<h3 className="text-lg font-semibold">Shipping</h3>
-							<div className="ml-auto"><Button variant="outline" size="sm" onClick={() => onSelectArea?.('shipping')}>View</Button></div>
+							<div className="ml-auto">
+								<Button
+									variant="outline"
+									size="sm"
+									disabled={!canOpenArea('shipping')}
+									onClick={() => {
+										if (canOpenArea('shipping')) onSelectArea?.('shipping');
+									}}
+								>
+									View
+								</Button>
+							</div>
 						</div>
 						<AreaStats {...makeAreaStats(byArea['shipping'])} />
 					</Card>

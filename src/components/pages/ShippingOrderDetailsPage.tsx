@@ -7,6 +7,8 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ArrowLeft, Package, User, Calendar, ClipboardCheck, Send, Truck, CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
 import * as api from '@/utils/api';
+import { useAlerts } from '@/providers/AlertProvider';
+import { AlertCard } from '@/components/alerts/AlertCard';
 
 interface Props {
   order: ShippingOrder;
@@ -18,6 +20,11 @@ export function ShippingOrderDetailsPage({ order: initialOrder, onBack }: Props)
   const [parts, setParts] = useState<PartReadiness[]>([]);
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [loading, setLoading] = useState(true);
+  const { alerts } = useAlerts();
+  const shippingAlerts = useMemo(
+    () => alerts.filter(alert => alert.relatedShippingOrders?.includes(order.id)),
+    [alerts, order.id],
+  );
 
   useEffect(() => {
     refresh();
@@ -138,6 +145,17 @@ export function ShippingOrderDetailsPage({ order: initialOrder, onBack }: Props)
               )}
             </div>
           </div>
+
+          {shippingAlerts.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-foreground">Active Alerts</h3>
+              <div className="space-y-2">
+                {shippingAlerts.map(alert => (
+                  <AlertCard key={alert.id} alert={alert} />
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="flex gap-2">
             <Button size="sm" variant="outline" disabled={order.status!=='picking' && order.status!=='pending'} onClick={handlePacked}>

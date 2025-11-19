@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GreenRoomDashboard, GlobalSearch, HomeDashboard, FabricationDashboard, ShippingDashboard, MachineAreaBoard, ProductionOverviewDashboard } from '@/components/dashboard';
 import { MachineDetailsPage, ECODetailsPage, WorkOrderDetailsPage, ShippingOrderDetailsPage } from '@/components/pages';
@@ -7,16 +7,58 @@ import * as mockData from '@/data/mock-data';
 import * as api from '@/utils/api';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
-import { Menu, FileUp, FileText, AlertCircle, ClipboardList, GitBranch, Home as HomeIcon, Factory, Package, Layers } from 'lucide-react';
+import { Menu, FileUp, FileText, AlertCircle, ClipboardList, GitBranch, Home as HomeIcon, Factory, Package, Layers, Gauge } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { AddNoteDialog } from './components/dialogs/AddNoteDialog';
 import { CreateWorkOrderDialog } from './components/dialogs/CreateWorkOrderDialog';
 import { LogEventDialog } from './components/dialogs/LogEventDialog';
 import { UploadDocumentDialog } from './components/dialogs/UploadDocumentDialog';
 import { UniversalMachineSidebar } from './components/machine/UniversalMachineSidebar';
+import { ToolLifeEstimationPage } from './components/tooling/ToolLifeEstimationPage';
 import { CreateECODialog } from './components/dialogs/CreateECODialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { useAuth } from '@/providers/AuthProvider';
+import { UserMenu } from '@/components/layout/UserMenu';
+import { AlertCenter } from '@/components/layout/AlertCenter';
+import type { PlantAreaKey, Capability } from '@/types/auth';
+
+const ORDERED_AREAS: PlantAreaKey[] = ['home', 'production', 'green-room', 'fabrication', 'shipping', 'machines', 'tool-life'];
+const AREA_CAPABILITIES: Record<PlantAreaKey, Capability> = {
+  home: 'view:home',
+  production: 'view:production',
+  'green-room': 'view:green-room',
+  fabrication: 'view:fabrication',
+  shipping: 'view:shipping',
+  machines: 'view:planner',
+  'tool-life': 'view:analytics',
+};
+const MACHINE_FILTER_AREAS: PlantAreaKey[] = ['fabrication', 'green-room'];
+const NAV_ITEMS: Array<{ area: PlantAreaKey; label: string; icon: LucideIcon }> = [
+  { area: 'home', label: 'Home', icon: HomeIcon },
+  { area: 'production', label: 'Production', icon: Layers },
+  { area: 'green-room', label: 'Green Room', icon: Factory },
+  { area: 'fabrication', label: 'Fabrication', icon: Factory },
+  { area: 'shipping', label: 'Shipping', icon: Package },
+  { area: 'machines', label: 'Machine Planner', icon: Factory },
+  { area: 'tool-life', label: 'Tool Life', icon: Gauge },
+];
 
 export default function App() {
+  const { currentUser, preferences, updatePreferences, hasCapability } = useAuth();
+  const allowedAreas = useMemo<PlantAreaKey[]>(() => {
+    return ORDERED_AREAS.filter(areaKey => {
+      const capability = AREA_CAPABILITIES[areaKey];
+      return currentUser.capabilities.includes(capability);
+    });
+  }, [currentUser.capabilities]);
+
+  const derivedDefaultArea = useMemo<PlantAreaKey>(() => {
+    if (preferences.defaultArea && allowedAreas.includes(preferences.defaultArea)) {
+      return preferences.defaultArea;
+    }
+    return allowedAreas[0] ?? 'home';
+  }, [allowedAreas, preferences.defaultArea]);
+
   const [selectedMachineDetails, setSelectedMachineDetails] = useState<Machine | null>(null);
   const [selectedECODetails, setSelectedECODetails] = useState<ECO | null>(null);
   const [selectedWorkOrderDetails, setSelectedWorkOrderDetails] = useState<WorkOrder | null>(null);
@@ -32,17 +74,78 @@ export default function App() {
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [prefilledBackupMachine, setPrefilledBackupMachine] = useState<Machine | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
-  const [machineFilterTerm, setMachineFilterTerm] = useState('');
-  const [area, setArea] = useState<'home' | 'production' | 'fabrication' | 'green-room' | 'shipping' | 'machines'>('green-room');
-  const AREA_LABELS: Record<typeof area, string> = {
+  const [area, setArea] = useState<PlantAreaKey>(derivedDefaultArea);
+  const AREA_LABELS: Record<PlantAreaKey, string> = {
     home: 'Home',
     production: 'Production Overview',
     fabrication: 'Fabrication',
     'green-room': 'Green Room',
     shipping: 'Shipping',
     machines: 'Machine Planner',
+    'tool-life': 'Tool Life Estimation',
   };
+  const [machineFilterTerm, setMachineFilterTerm] = useState('');
   const [navOpen, setNavOpen] = useState(false);
+  useEffect(() => {
+    if (!allowedAreas.includes(area)) {
+      setArea(derivedDefaultArea);
+    }
+  }, [allowedAreas, area, derivedDefaultArea]);
+
+  useEffect(() => {
+    if (preferences.defaultArea !== area) {
+      updatePreferences({ defaultArea: area });
+    }
+  }, [area, preferences.defaultArea, updatePreferences]);
+
+  useEffect(() => {
+    const storedFilters = preferences.machineFilters ?? {};
+    const nextFilter = storedFilters[area] ?? '';
+    setMachineFilterTerm(nextFilter);
+  }, [area, preferences.machineFilters]);
+
+  const handleMachineFilterChange = useCallback(
+    (value: string) => {
+      setMachineFilterTerm(value);
+      if (MACHINE_FILTER_AREAS.includes(area)) {
+        updatePreferences({
+          machineFilters: {
+            ...(preferences.machineFilters ?? {}),
+            [area]: value,
+          },
+        });
+      }
+    },
+    [area, preferences.machineFilters, updatePreferences],
+  );
+
+  const resetDetailSelections = useCallback(() => {
+    setSelectedMachineDetails(null);
+    setSelectedECODetails(null);
+    setSelectedWorkOrderDetails(null);
+    setSelectedShippingOrder(null);
+    setSidebarMachine(null);
+    setSelectedSidebarMachine(null);
+    setPrefilledECO(null);
+    setPrefilledBackupMachine(null);
+    setUploadDialogOpen(false);
+    setNoteDialogOpen(false);
+    setEventDialogOpen(false);
+    setWorkOrderDialogOpen(false);
+    setEcoDialogOpen(false);
+  }, []);
+
+  const navigateToArea = useCallback(
+    (nextArea: PlantAreaKey) => {
+      if (!allowedAreas.includes(nextArea)) {
+        return;
+      }
+      resetDetailSelections();
+      setArea(nextArea);
+      setNavOpen(false);
+    },
+    [allowedAreas, resetDetailSelections],
+  );
 
   // Fabrication machine IDs for contextual dialogs
   const fabricationCategories = new Set([
@@ -132,102 +235,20 @@ export default function App() {
               </SheetHeader>
               <nav className="px-2 py-1">
                 <ul className="space-y-1">
-                  <li>
-                    <Button
-                      variant={area === 'home' ? 'secondary' : 'ghost'}
-                      className="w-full justify-start gap-2"
-                      onClick={() => {
-                        setArea('home');
-                        setSelectedMachineDetails(null);
-                        setSelectedECODetails(null);
-                        setSelectedWorkOrderDetails(null);
-                        setMachineFilterTerm('');
-                        setNavOpen(false);
-                      }}
-                    >
-                      <HomeIcon className="w-4 h-4" /> Home
-                    </Button>
-                  </li>
-                  <li>
-                    <Button
-                      variant={area === 'production' ? 'secondary' : 'ghost'}
-                      className="w-full justify-start gap-2"
-                      onClick={() => {
-                        setArea('production');
-                        setSelectedMachineDetails(null);
-                        setSelectedECODetails(null);
-                        setSelectedWorkOrderDetails(null);
-                        setMachineFilterTerm('');
-                        setNavOpen(false);
-                      }}
-                    >
-                      <Layers className="w-4 h-4" /> Production
-                    </Button>
-                  </li>
-                  <li>
-                    <Button
-                      variant={area === 'green-room' ? 'secondary' : 'ghost'}
-                      className="w-full justify-start gap-2"
-                      onClick={() => {
-                        setArea('green-room');
-                        setSelectedMachineDetails(null);
-                        setSelectedECODetails(null);
-                        setSelectedWorkOrderDetails(null);
-                        setMachineFilterTerm('');
-                        setNavOpen(false);
-                      }}
-                    >
-                      <Factory className="w-4 h-4" /> Green Room
-                    </Button>
-                  </li>
-                  <li>
-                    <Button
-                      variant={area === 'fabrication' ? 'secondary' : 'ghost'}
-                      className="w-full justify-start gap-2"
-                      onClick={() => {
-                        setArea('fabrication');
-                        setSelectedMachineDetails(null);
-                        setSelectedECODetails(null);
-                        setSelectedWorkOrderDetails(null);
-                        setMachineFilterTerm('');
-                        setNavOpen(false);
-                      }}
-                    >
-                      <Factory className="w-4 h-4" /> Fabrication
-                    </Button>
-                  </li>
-                  <li>
-                    <Button
-                      variant={area === 'shipping' ? 'secondary' : 'ghost'}
-                      className="w-full justify-start gap-2"
-                      onClick={() => {
-                        setArea('shipping');
-                        setSelectedMachineDetails(null);
-                        setSelectedECODetails(null);
-                        setSelectedWorkOrderDetails(null);
-                        setMachineFilterTerm('');
-                        setNavOpen(false);
-                      }}
-                    >
-                      <Package className="w-4 h-4" /> Shipping
-                    </Button>
-                  </li>
-                  <li>
-                    <Button
-                      variant={area === 'machines' ? 'secondary' : 'ghost'}
-                      className="w-full justify-start gap-2"
-                      onClick={() => {
-                        setArea('machines');
-                        setSelectedMachineDetails(null);
-                        setSelectedECODetails(null);
-                        setSelectedWorkOrderDetails(null);
-                        setMachineFilterTerm('');
-                        setNavOpen(false);
-                      }}
-                    >
-                      <Factory className="w-4 h-4" /> Machine Planner
-                    </Button>
-                  </li>
+                  {NAV_ITEMS.filter(item => allowedAreas.includes(item.area)).map(item => {
+                    const Icon = item.icon;
+                    return (
+                      <li key={item.area}>
+                        <Button
+                          variant={area === item.area ? 'secondary' : 'ghost'}
+                          className="w-full justify-start gap-2"
+                          onClick={() => navigateToArea(item.area)}
+                        >
+                          <Icon className="w-4 h-4" /> {item.label}
+                        </Button>
+                      </li>
+                    );
+                  })}
                 </ul>
               </nav>
             </SheetContent>
@@ -241,53 +262,67 @@ export default function App() {
             </p>
           </div>
           
-          {/* Quick Actions */}
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="hover:shadow-sm hover:-translate-y-0.5 transition-all duration-200"
-              onClick={() => setUploadDialogOpen(true)}
-            >
-              <FileUp className="w-4 h-4 mr-2" />
-              Upload
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="hover:shadow-sm hover:-translate-y-0.5 transition-all duration-200"
-              onClick={() => setNoteDialogOpen(true)}
-            >
-              <FileText className="w-4 h-4 mr-2" />
-              Note
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="hover:shadow-sm hover:-translate-y-0.5 transition-all duration-200"
-              onClick={() => setEventDialogOpen(true)}
-            >
-              <AlertCircle className="w-4 h-4 mr-2" />
-              Event
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="hover:shadow-sm hover:-translate-y-0.5 transition-all duration-200"
-              onClick={() => setWorkOrderDialogOpen(true)}
-            >
-              <ClipboardList className="w-4 h-4 mr-2" />
-              Work Order
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="hover:shadow-sm hover:-translate-y-0.5 transition-all duration-200"
-              onClick={() => setEcoDialogOpen(true)}
-            >
-              <GitBranch className="w-4 h-4 mr-2" />
-              ECO
-            </Button>
+          {/* Quick Actions / User Menu */}
+          <div className="flex items-center gap-4">
+            <div className="flex gap-2">
+              {hasCapability('manage:documents') && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="hover:shadow-sm hover:-translate-y-0.5 transition-all duration-200"
+                  onClick={() => setUploadDialogOpen(true)}
+                >
+                  <FileUp className="w-4 h-4 mr-2" />
+                  Upload
+                </Button>
+              )}
+              {hasCapability('manage:notes') && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="hover:shadow-sm hover:-translate-y-0.5 transition-all duration-200"
+                  onClick={() => setNoteDialogOpen(true)}
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  Note
+                </Button>
+              )}
+              {hasCapability('manage:events') && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="hover:shadow-sm hover:-translate-y-0.5 transition-all duration-200"
+                  onClick={() => setEventDialogOpen(true)}
+                >
+                  <AlertCircle className="w-4 h-4 mr-2" />
+                  Event
+                </Button>
+              )}
+              {hasCapability('manage:workorders') && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="hover:shadow-sm hover:-translate-y-0.5 transition-all duration-200"
+                  onClick={() => setWorkOrderDialogOpen(true)}
+                >
+                  <ClipboardList className="w-4 h-4 mr-2" />
+                  Work Order
+                </Button>
+              )}
+              {hasCapability('manage:ecos') && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="hover:shadow-sm hover:-translate-y-0.5 transition-all duration-200"
+                  onClick={() => setEcoDialogOpen(true)}
+                >
+                  <GitBranch className="w-4 h-4 mr-2" />
+                  ECO
+                </Button>
+              )}
+            </div>
+            <AlertCenter />
+            <UserMenu />
           </div>
         </div>
       </header>
@@ -433,10 +468,13 @@ export default function App() {
                   className="w-full h-full overflow-auto"
                 >
                   {area === 'home' ? (
-                    <HomeDashboard onSelectArea={(a) => setArea(a)} />
+                    <HomeDashboard
+                      onSelectArea={(a) => navigateToArea(a as PlantAreaKey)}
+                      isAreaEnabled={(key) => allowedAreas.includes(key as PlantAreaKey)}
+                    />
                   ) : area === 'production' ? (
                     <ProductionOverviewDashboard
-                      onSelectArea={(nextArea) => setArea(nextArea)}
+                      onSelectArea={(nextArea) => navigateToArea(nextArea as PlantAreaKey)}
                     />
                   ) : area === 'fabrication' ? (
                     <FabricationDashboard
@@ -453,7 +491,7 @@ export default function App() {
                       }}
                       onViewWorkOrderDetails={(workOrder: WorkOrder) => setSelectedWorkOrderDetails(workOrder)}
                       machineFilterTerm={machineFilterTerm}
-                      onMachineFilterChange={setMachineFilterTerm}
+                      onMachineFilterChange={handleMachineFilterChange}
                     />
                   ) : area === 'shipping' ? (
                     <ShippingDashboard 
@@ -465,6 +503,8 @@ export default function App() {
                     />
                   ) : area === 'machines' ? (
                     <MachineAreaBoard />
+                  ) : area === 'tool-life' ? (
+                    <ToolLifeEstimationPage />
                   ) : (
                     <GreenRoomDashboard 
                       selectedMachine={selectedSidebarMachine}
@@ -486,7 +526,7 @@ export default function App() {
                         setSelectedWorkOrderDetails(workOrder);
                       }}
                       machineFilterTerm={machineFilterTerm}
-                      onMachineFilterChange={setMachineFilterTerm}
+                      onMachineFilterChange={handleMachineFilterChange}
                     />
                   )}
                 </motion.div>

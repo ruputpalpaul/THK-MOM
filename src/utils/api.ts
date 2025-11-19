@@ -1,8 +1,13 @@
 import { Machine, Event, WorkOrder, Document, ECO, Component, MachineSetting, ProductionData, ShippingOrder, Delivery, PartReadiness } from '../types/green-room';
 import * as mock from '../data/mock-data';
 import { withFormattedMachineName } from './machineNaming';
+import * as liveDataClient from '@/services/liveDataClient';
 
 export type Category = { name: string; count: number };
+
+const useLiveApi = import.meta.env.VITE_USE_LIVE_API === 'true';
+
+export const isLiveApiEnabled = (): boolean => useLiveApi;
 
 // In-memory local store seeded from mock-data (no network calls)
 let db = {
@@ -31,6 +36,10 @@ export async function initializeDatabase(data: {
   productionData: ProductionData[];
   categories: Category[];
 }): Promise<{ initialized: boolean; message: string }> {
+  if (useLiveApi) {
+    return liveDataClient.initializeDatabase(data);
+  }
+
   const machines = data.machines.map(machine => withFormattedMachineName(machine));
   db = {
     machines,
@@ -50,18 +59,36 @@ export async function initializeDatabase(data: {
 }
 
 // Machines
-export async function getMachines(): Promise<Machine[]> { return Promise.resolve([...db.machines]); }
+export async function getMachines(): Promise<Machine[]> {
+  if (useLiveApi) {
+    return liveDataClient.getMachines();
+  }
+
+  return Promise.resolve([...db.machines]);
+}
 export async function getMachine(id: string): Promise<Machine> {
+  if (useLiveApi) {
+    return liveDataClient.getMachine(id);
+  }
+
   const m = db.machines.find(m => m.id === id);
   if (!m) throw new Error('Machine not found');
   return Promise.resolve({ ...m });
 }
 export async function createMachine(machine: Machine): Promise<Machine> {
+  if (useLiveApi) {
+    return liveDataClient.createMachine(machine);
+  }
+
   const formatted = withFormattedMachineName(machine);
   db.machines.push(formatted);
   return Promise.resolve(formatted);
 }
 export async function updateMachine(id: string, updates: Partial<Machine>): Promise<Machine> {
+  if (useLiveApi) {
+    return liveDataClient.updateMachine(id, updates);
+  }
+
   const idx = db.machines.findIndex(m => m.id === id);
   if (idx === -1) throw new Error('Machine not found');
   // Enforce downtime reason when setting status to 'down'
@@ -77,13 +104,38 @@ export async function updateMachine(id: string, updates: Partial<Machine>): Prom
 }
 
 // Events
-export async function getEvents(): Promise<Event[]> { return Promise.resolve([...db.events]); }
-export async function createEvent(event: Event): Promise<Event> { db.events.push(event); return Promise.resolve(event); }
+export async function getEvents(): Promise<Event[]> {
+  if (useLiveApi) {
+    return liveDataClient.getEvents();
+  }
+  return Promise.resolve([...db.events]);
+}
+export async function createEvent(event: Event): Promise<Event> {
+  if (useLiveApi) {
+    return liveDataClient.createEvent(event);
+  }
+  db.events.push(event);
+  return Promise.resolve(event);
+}
 
 // Work Orders
-export async function getWorkOrders(): Promise<WorkOrder[]> { return Promise.resolve([...db.workOrders]); }
-export async function createWorkOrder(workOrder: WorkOrder): Promise<WorkOrder> { db.workOrders.push(workOrder); return Promise.resolve(workOrder); }
+export async function getWorkOrders(): Promise<WorkOrder[]> {
+  if (useLiveApi) {
+    return liveDataClient.getWorkOrders();
+  }
+  return Promise.resolve([...db.workOrders]);
+}
+export async function createWorkOrder(workOrder: WorkOrder): Promise<WorkOrder> {
+  if (useLiveApi) {
+    return liveDataClient.createWorkOrder(workOrder);
+  }
+  db.workOrders.push(workOrder);
+  return Promise.resolve(workOrder);
+}
 export async function updateWorkOrder(id: string, updates: Partial<WorkOrder>): Promise<WorkOrder> {
+  if (useLiveApi) {
+    return liveDataClient.updateWorkOrder(id, updates);
+  }
   const idx = db.workOrders.findIndex(w => w.id === id);
   if (idx === -1) throw new Error('Work order not found');
   db.workOrders[idx] = { ...db.workOrders[idx], ...updates } as WorkOrder;
@@ -91,44 +143,110 @@ export async function updateWorkOrder(id: string, updates: Partial<WorkOrder>): 
 }
 
 // Documents
-export async function getDocuments(): Promise<Document[]> { return Promise.resolve([...db.documents]); }
-export async function createDocument(document: Document): Promise<Document> { db.documents.push(document); return Promise.resolve(document); }
+export async function getDocuments(): Promise<Document[]> {
+  if (useLiveApi) {
+    return liveDataClient.getDocuments();
+  }
+  return Promise.resolve([...db.documents]);
+}
+export async function createDocument(document: Document): Promise<Document> {
+  if (useLiveApi) {
+    return liveDataClient.createDocument(document);
+  }
+  db.documents.push(document);
+  return Promise.resolve(document);
+}
 
 // ECOs
-export async function getECOs(): Promise<ECO[]> { return Promise.resolve([...db.ecos]); }
-export async function createECO(eco: ECO): Promise<ECO> { db.ecos.push(eco); return Promise.resolve(eco); }
+export async function getECOs(): Promise<ECO[]> {
+  if (useLiveApi) {
+    return liveDataClient.getECOs();
+  }
+  return Promise.resolve([...db.ecos]);
+}
+export async function createECO(eco: ECO): Promise<ECO> {
+  if (useLiveApi) {
+    return liveDataClient.createECO(eco);
+  }
+  db.ecos.push(eco);
+  return Promise.resolve(eco);
+}
 
 // Components
-export async function getComponents(): Promise<Component[]> { return Promise.resolve([...db.components]); }
+export async function getComponents(): Promise<Component[]> {
+  if (useLiveApi) {
+    return liveDataClient.getComponents();
+  }
+  return Promise.resolve([...db.components]);
+}
 
 // Machine Settings
-export async function getMachineSettings(): Promise<MachineSetting[]> { return Promise.resolve([...db.machineSettings]); }
+export async function getMachineSettings(): Promise<MachineSetting[]> {
+  if (useLiveApi) {
+    return liveDataClient.getMachineSettings();
+  }
+  return Promise.resolve([...db.machineSettings]);
+}
 
 // Production Data
-export async function getProductionData(): Promise<ProductionData[]> { return Promise.resolve([...db.productionData]); }
+export async function getProductionData(): Promise<ProductionData[]> {
+  if (useLiveApi) {
+    return liveDataClient.getProductionData();
+  }
+  return Promise.resolve([...db.productionData]);
+}
 
 // Categories
-export async function getCategories(): Promise<Category[]> { return Promise.resolve([...db.categories]); }
+export async function getCategories(): Promise<Category[]> {
+  if (useLiveApi) {
+    return liveDataClient.getCategories();
+  }
+  return Promise.resolve([...db.categories]);
+}
 
 // Shipping: Orders, Deliveries, Parts Readiness
-export async function getShippingOrders(): Promise<ShippingOrder[]> { return Promise.resolve([...db.shippingOrders]); }
+export async function getShippingOrders(): Promise<ShippingOrder[]> {
+  if (useLiveApi) {
+    return liveDataClient.getShippingOrders();
+  }
+  return Promise.resolve([...db.shippingOrders]);
+}
 export async function updateShippingOrder(id: string, updates: Partial<ShippingOrder>): Promise<ShippingOrder> {
+  if (useLiveApi) {
+    return liveDataClient.updateShippingOrder(id, updates);
+  }
   const idx = db.shippingOrders.findIndex(o => o.id === id);
   if (idx === -1) throw new Error('Shipping order not found');
   db.shippingOrders[idx] = { ...db.shippingOrders[idx], ...updates } as ShippingOrder;
   return Promise.resolve(db.shippingOrders[idx]);
 }
 
-export async function getDeliveries(): Promise<Delivery[]> { return Promise.resolve([...db.deliveries]); }
+export async function getDeliveries(): Promise<Delivery[]> {
+  if (useLiveApi) {
+    return liveDataClient.getDeliveries();
+  }
+  return Promise.resolve([...db.deliveries]);
+}
 export async function updateDelivery(id: string, updates: Partial<Delivery>): Promise<Delivery> {
+  if (useLiveApi) {
+    return liveDataClient.updateDelivery(id, updates);
+  }
   const idx = db.deliveries.findIndex(d => d.id === id);
   if (idx === -1) throw new Error('Delivery not found');
   db.deliveries[idx] = { ...db.deliveries[idx], ...updates } as Delivery;
   return Promise.resolve(db.deliveries[idx]);
 }
 
-export async function getPartsReadiness(): Promise<PartReadiness[]> { return Promise.resolve([...db.partsReadiness]); }
+export async function getPartsReadiness(): Promise<PartReadiness[]> {
+  if (useLiveApi) {
+    return liveDataClient.getPartsReadiness();
+  }
+  return Promise.resolve([...db.partsReadiness]);
+}
 export async function updatePartReadiness(id: string, updates: Partial<PartReadiness>): Promise<PartReadiness> {
+  if (useLiveApi) {
+    return liveDataClient.updatePartReadiness(id, updates);
+  }
   const idx = db.partsReadiness.findIndex(p => p.id === id);
   if (idx === -1) throw new Error('Part readiness not found');
   db.partsReadiness[idx] = { ...db.partsReadiness[idx], ...updates } as PartReadiness;
@@ -137,6 +255,9 @@ export async function updatePartReadiness(id: string, updates: Partial<PartReadi
 
 // Domain helpers for Shipping
 export async function markOrderPacked(orderId: string): Promise<ShippingOrder> {
+  if (useLiveApi) {
+    return liveDataClient.markOrderPacked(orderId);
+  }
   const order = db.shippingOrders.find(o => o.id === orderId);
   if (!order) throw new Error('Order not found');
   order.status = 'packed';
@@ -145,6 +266,9 @@ export async function markOrderPacked(orderId: string): Promise<ShippingOrder> {
 }
 
 export async function markOrderShipped(orderId: string): Promise<ShippingOrder> {
+  if (useLiveApi) {
+    return liveDataClient.markOrderShipped(orderId);
+  }
   const order = db.shippingOrders.find(o => o.id === orderId);
   if (!order) throw new Error('Order not found');
   order.status = 'shipped';
@@ -154,6 +278,9 @@ export async function markOrderShipped(orderId: string): Promise<ShippingOrder> 
 
 // Allocate quantity of a part towards an order item and update readiness accordingly.
 export async function allocateToOrder(orderId: string, sku: string, qty: number): Promise<{ order: ShippingOrder; parts: PartReadiness[] }>{
+  if (useLiveApi) {
+    return liveDataClient.allocateToOrder(orderId, sku, qty);
+  }
   const order = db.shippingOrders.find(o => o.id === orderId);
   if (!order) throw new Error('Order not found');
   const item = order.items.find(i => i.sku === sku);

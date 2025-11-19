@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { ECO, WorkOrder } from '../../types/green-room';
 import { documents, components, machineSettings } from '../../data/mock-data';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -23,6 +24,8 @@ import {
 import { ScrollArea } from '../ui/scroll-area';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
+import { useAlerts } from '@/providers/AlertProvider';
+import { AlertCard } from '../alerts/AlertCard';
 
 interface ECODetailsPageProps {
   eco: ECO;
@@ -50,6 +53,11 @@ export function ECODetailsPage({ eco, workOrders, onBack, onCreateWorkOrder }: E
   );
 
   const modSheet = eco.modSheet;
+  const { alerts } = useAlerts();
+  const ecoAlerts = useMemo(
+    () => alerts.filter(alert => alert.relatedEcos?.includes(eco.id)),
+    [alerts, eco.id],
+  );
 
   const boolToLabel = (value?: boolean) => (value ? 'Yes' : 'No');
 
@@ -392,6 +400,17 @@ export function ECODetailsPage({ eco, workOrders, onBack, onCreateWorkOrder }: E
               </div>
             </div>
           </div>
+
+          {ecoAlerts.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-foreground">Active Alerts</h3>
+              <div className="space-y-2">
+                {ecoAlerts.map(alert => (
+                  <AlertCard key={alert.id} alert={alert} />
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Quick Actions */}
           <div className="flex gap-2">
