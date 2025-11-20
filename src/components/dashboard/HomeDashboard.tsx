@@ -7,6 +7,7 @@ import { StatusTile } from './StatusTile';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, BarChart3, Factory, FileText, Server, Wrench, Activity, TrendingUp, Package, Layers } from 'lucide-react';
+import { DrillDownDrawer, DrillDownItem } from './DrillDownDrawer';
 
 export function HomeDashboard({
 	onSelectArea,
@@ -22,23 +23,36 @@ export function HomeDashboard({
 	const [events, setEvents] = useState<Event[]>([]);
 	const [loading, setLoading] = useState(true);
 
+	// Drill-down state
+	const [drawerOpen, setDrawerOpen] = useState(false);
+	const [drawerTitle, setDrawerTitle] = useState('');
+	const [drawerItems, setDrawerItems] = useState<DrillDownItem[]>([]);
+	const [drawerType, setDrawerType] = useState<'machine' | 'work-order' | 'eco'>('machine');
+
+	const openDrawer = (title: string, items: DrillDownItem[], type: 'machine' | 'work-order' | 'eco') => {
+		setDrawerTitle(title);
+		setDrawerItems(items);
+		setDrawerType(type);
+		setDrawerOpen(true);
+	};
+
 	useEffect(() => {
 		let mounted = true;
 		(async () => {
 			try {
-						const [m, w, e, p, ev] = await Promise.all([
+				const [m, w, e, p, ev] = await Promise.all([
 					api.getMachines(),
 					api.getWorkOrders(),
 					api.getECOs(),
 					api.getProductionData(),
-							api.getEvents(),
+					api.getEvents(),
 				]);
 				if (!mounted) return;
 				setMachines(m);
 				setWorkOrders(w);
 				setECOs(e);
 				setProduction(p);
-						setEvents(ev);
+				setEvents(ev);
 			} catch (err) {
 				console.error('Failed to load home data', err);
 			} finally {
@@ -88,40 +102,40 @@ export function HomeDashboard({
 			todayScrap,
 			avgOEE,
 			totalDowntime,
-				planAttainment: todayTarget ? Math.round((todayActual / todayTarget) * 100) : 0,
-				uptimeRatio: total ? Math.round((active / total) * 100) : 0,
+			planAttainment: todayTarget ? Math.round((todayActual / todayTarget) * 100) : 0,
+			uptimeRatio: total ? Math.round((active / total) * 100) : 0,
 		};
 	}, [machines, workOrders, ecos, production]);
 
-		// Classify machines into high-level plant areas (heuristics; refine when explicit area tags are available)
-		const classifyArea = (m: Machine): PlantAreaKey | 'wrap-pack' | 'other' => {
-			const cat = (m.category || '').toLowerCase();
-			const typ = (m.type || '').toLowerCase();
-			if (cat.includes('assembly') || typ.includes('assembly') || cat.includes('retainer')) return 'green-room';
-			if (cat.includes('wrap') || cat.includes('pack') || typ.includes('forklift')) return 'shipping';
-			// Remaining equipment is treated as fabrication assets
-			if (cat || typ) return 'fabrication';
-			return 'other';
-		};
+	// Classify machines into high-level plant areas (heuristics; refine when explicit area tags are available)
+	const classifyArea = (m: Machine): PlantAreaKey | 'wrap-pack' | 'other' => {
+		const cat = (m.category || '').toLowerCase();
+		const typ = (m.type || '').toLowerCase();
+		if (cat.includes('assembly') || typ.includes('assembly') || cat.includes('retainer')) return 'green-room';
+		if (cat.includes('wrap') || cat.includes('pack') || typ.includes('forklift')) return 'shipping';
+		// Remaining equipment is treated as fabrication assets
+		if (cat || typ) return 'fabrication';
+		return 'other';
+	};
 
-		const byArea = useMemo(() => {
-			const map: Record<PlantAreaKey, Machine[]> = {
-				'home': [],
-				'production': [],
-				'green-room': [],
-				'fabrication': [],
-				'shipping': [],
-				'machines': [],
-				'tool-life': [],
-			};
-			for (const m of machines) {
-				const a = classifyArea(m);
-				if (a === 'other') continue;
-				if (a !== 'home') map[a as PlantAreaKey].push(m);
-			}
-			map['production'] = [...map['fabrication'], ...map['green-room'], ...map['shipping']];
-			return map;
-		}, [machines]);
+	const byArea = useMemo(() => {
+		const map: Record<PlantAreaKey, Machine[]> = {
+			'home': [],
+			'production': [],
+			'green-room': [],
+			'fabrication': [],
+			'shipping': [],
+			'machines': [],
+			'tool-life': [],
+		};
+		for (const m of machines) {
+			const a = classifyArea(m);
+			if (a === 'other') continue;
+			if (a !== 'home') map[a as PlantAreaKey].push(m);
+		}
+		map['production'] = [...map['fabrication'], ...map['green-room'], ...map['shipping']];
+		return map;
+	}, [machines]);
 
 	const makeAreaStats = (list: Machine[]) => {
 		const total = list.length;
@@ -151,15 +165,59 @@ export function HomeDashboard({
 	return (
 		<div className="w-full h-full bg-gradient-to-br from-gray-50 to-white overflow-auto">
 			<div className="p-4 sm:p-6 space-y-8">
-					{/* Global KPIs */}
-					<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-						<StatusTile title="Total Machines" value={stats.total} icon={Server} variant="default" />
-						<StatusTile title="Uptime" value={`${stats.uptimeRatio}%`} icon={Activity} variant={stats.uptimeRatio >= 90 ? 'success' : stats.uptimeRatio >= 75 ? 'warning' : 'danger'} subtitle={`${stats.active} active`} />
-						<StatusTile title="Plan Attainment" value={`${stats.planAttainment}%`} icon={TrendingUp} variant={stats.planAttainment >= 95 ? 'success' : stats.planAttainment >= 85 ? 'warning' : 'danger'} subtitle={`${stats.todayActual}/${stats.todayTarget}`} />
-						<StatusTile title="Scrap Today" value={stats.todayScrap} icon={AlertTriangle} variant={stats.todayScrap > 0 ? 'warning' : 'success'} />
-						<StatusTile title="Pending WOs" value={stats.pendingWOs} icon={Wrench} variant={stats.pendingWOs > 3 ? 'warning' : 'default'} />
-						<StatusTile title="ECOs in Review" value={stats.ecosInReview} icon={FileText} variant="default" />
-					</div>
+				{/* Global KPIs */}
+				<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+					<StatusTile
+						title="Total Machines"
+						value={stats.total}
+						icon={Server}
+						variant="default"
+						onClick={() => openDrawer('All Machines', machines, 'machine')}
+						className="cursor-pointer hover:border-primary/50 transition-colors"
+					/>
+					<StatusTile
+						title="Uptime"
+						value={`${stats.uptimeRatio}%`}
+						icon={Activity}
+						variant={stats.uptimeRatio >= 90 ? 'success' : stats.uptimeRatio >= 75 ? 'warning' : 'danger'}
+						subtitle={`${stats.active} active`}
+						onClick={() => openDrawer('Active Machines', machines.filter(m => m.status === 'active'), 'machine')}
+						className="cursor-pointer hover:border-primary/50 transition-colors"
+					/>
+					<StatusTile
+						title="Plan Attainment"
+						value={`${stats.planAttainment}%`}
+						icon={TrendingUp}
+						variant={stats.planAttainment >= 95 ? 'success' : stats.planAttainment >= 85 ? 'warning' : 'danger'}
+						subtitle={`${stats.todayActual}/${stats.todayTarget}`}
+						onClick={() => onSelectArea?.('production')}
+						className="cursor-pointer hover:border-primary/50 transition-colors"
+					/>
+					<StatusTile
+						title="Scrap Today"
+						value={stats.todayScrap}
+						icon={AlertTriangle}
+						variant={stats.todayScrap > 0 ? 'warning' : 'success'}
+						onClick={() => onSelectArea?.('production')}
+						className="cursor-pointer hover:border-primary/50 transition-colors"
+					/>
+					<StatusTile
+						title="Pending WOs"
+						value={stats.pendingWOs}
+						icon={Wrench}
+						variant={stats.pendingWOs > 3 ? 'warning' : 'default'}
+						onClick={() => openDrawer('Pending Work Orders', workOrders.filter(wo => wo.status !== 'completed'), 'work-order')}
+						className="cursor-pointer hover:border-primary/50 transition-colors"
+					/>
+					<StatusTile
+						title="ECOs in Review"
+						value={stats.ecosInReview}
+						icon={FileText}
+						variant="default"
+						onClick={() => openDrawer('ECOs in Review', ecos.filter(e => e.status === 'review'), 'eco')}
+						className="cursor-pointer hover:border-primary/50 transition-colors"
+					/>
+				</div>
 
 				{/* Area overview */}
 				<div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
@@ -241,87 +299,94 @@ export function HomeDashboard({
 					</Card>
 				</div>
 
-					{/* Today’s production snapshot */}
+				{/* Today’s production snapshot */}
+				<Card className="p-6 border-2 bg-white">
+					<div className="flex items-center gap-3 mb-4">
+						<BarChart3 className="w-5 h-5 text-blue-600" />
+						<h3 className="text-lg font-semibold">Today's Production</h3>
+					</div>
+					<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+						<SummaryStat label="Target" value={stats.todayTarget} />
+						<SummaryStat label="Actual" value={stats.todayActual} />
+						<SummaryStat label="Plan Attainment" value={`${stats.planAttainment}%`} />
+						<SummaryStat label="Avg OEE" value={stats.avgOEE !== undefined ? `${stats.avgOEE}%` : '—'} />
+					</div>
+				</Card>
+
+				{/* Live issues & maintenance */}
+				<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 					<Card className="p-6 border-2 bg-white">
 						<div className="flex items-center gap-3 mb-4">
-							<BarChart3 className="w-5 h-5 text-blue-600" />
-							<h3 className="text-lg font-semibold">Today's Production</h3>
+							<AlertTriangle className="w-5 h-5 text-rose-600" />
+							<h3 className="text-lg font-semibold">Recent Events</h3>
 						</div>
-						<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-							<SummaryStat label="Target" value={stats.todayTarget} />
-							<SummaryStat label="Actual" value={stats.todayActual} />
-							<SummaryStat label="Plan Attainment" value={`${stats.planAttainment}%`} />
-							<SummaryStat label="Avg OEE" value={stats.avgOEE !== undefined ? `${stats.avgOEE}%` : '—'} />
-						</div>
+						<Table>
+							<TableHeader>
+								<TableRow>
+									<TableHead>Time</TableHead>
+									<TableHead>Machine</TableHead>
+									<TableHead>Type</TableHead>
+									<TableHead>Description</TableHead>
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								{events.slice(0, 6).map((ev) => (
+									<TableRow key={ev.id}>
+										<TableCell className="text-muted-foreground">{ev.timestamp}</TableCell>
+										<TableCell>{ev.machineName}</TableCell>
+										<TableCell className="capitalize">{ev.type}</TableCell>
+										<TableCell className="max-w-[28rem] truncate">{ev.description}</TableCell>
+									</TableRow>
+								))}
+								{events.length === 0 && (
+									<TableRow>
+										<TableCell colSpan={4} className="text-sm text-muted-foreground">No recent events</TableCell>
+									</TableRow>
+								)}
+							</TableBody>
+						</Table>
 					</Card>
 
-					{/* Live issues & maintenance */}
-					<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-						<Card className="p-6 border-2 bg-white">
-							<div className="flex items-center gap-3 mb-4">
-								<AlertTriangle className="w-5 h-5 text-rose-600" />
-								<h3 className="text-lg font-semibold">Recent Events</h3>
-							</div>
-							<Table>
-								<TableHeader>
-									<TableRow>
-										<TableHead>Time</TableHead>
-										<TableHead>Machine</TableHead>
-										<TableHead>Type</TableHead>
-										<TableHead>Description</TableHead>
+					<Card className="p-6 border-2 bg-white">
+						<div className="flex items-center gap-3 mb-4">
+							<Wrench className="w-5 h-5 text-purple-600" />
+							<h3 className="text-lg font-semibold">Open Work Orders</h3>
+						</div>
+						<Table>
+							<TableHeader>
+								<TableRow>
+									<TableHead>ID</TableHead>
+									<TableHead>Machine</TableHead>
+									<TableHead>Type</TableHead>
+									<TableHead>Status</TableHead>
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								{workOrders.filter(w => w.status !== 'completed').slice(0, 6).map((wo) => (
+									<TableRow key={wo.id}>
+										<TableCell>{wo.id}</TableCell>
+										<TableCell>{wo.machineName}</TableCell>
+										<TableCell>{wo.type}</TableCell>
+										<TableCell className="capitalize">{wo.status}</TableCell>
 									</TableRow>
-								</TableHeader>
-								<TableBody>
-									{events.slice(0, 6).map((ev) => (
-										<TableRow key={ev.id}>
-											<TableCell className="text-muted-foreground">{ev.timestamp}</TableCell>
-											<TableCell>{ev.machineName}</TableCell>
-											<TableCell className="capitalize">{ev.type}</TableCell>
-											<TableCell className="max-w-[28rem] truncate">{ev.description}</TableCell>
-										</TableRow>
-									))}
-									{events.length === 0 && (
-										<TableRow>
-											<TableCell colSpan={4} className="text-sm text-muted-foreground">No recent events</TableCell>
-										</TableRow>
-									)}
-								</TableBody>
-							</Table>
-						</Card>
-
-						<Card className="p-6 border-2 bg-white">
-							<div className="flex items-center gap-3 mb-4">
-								<Wrench className="w-5 h-5 text-purple-600" />
-								<h3 className="text-lg font-semibold">Open Work Orders</h3>
-							</div>
-							<Table>
-								<TableHeader>
+								))}
+								{workOrders.filter(w => w.status !== 'completed').length === 0 && (
 									<TableRow>
-										<TableHead>ID</TableHead>
-										<TableHead>Machine</TableHead>
-										<TableHead>Type</TableHead>
-										<TableHead>Status</TableHead>
+										<TableCell colSpan={4} className="text-sm text-muted-foreground">No open work orders</TableCell>
 									</TableRow>
-								</TableHeader>
-								<TableBody>
-									{workOrders.filter(w => w.status !== 'completed').slice(0, 6).map((wo) => (
-										<TableRow key={wo.id}>
-											<TableCell>{wo.id}</TableCell>
-											<TableCell>{wo.machineName}</TableCell>
-											<TableCell>{wo.type}</TableCell>
-											<TableCell className="capitalize">{wo.status}</TableCell>
-										</TableRow>
-									))}
-									{workOrders.filter(w => w.status !== 'completed').length === 0 && (
-										<TableRow>
-											<TableCell colSpan={4} className="text-sm text-muted-foreground">No open work orders</TableCell>
-										</TableRow>
-									)}
-								</TableBody>
-							</Table>
-						</Card>
-					</div>
+								)}
+							</TableBody>
+						</Table>
+					</Card>
+				</div>
 			</div>
+			<DrillDownDrawer
+				isOpen={drawerOpen}
+				onClose={() => setDrawerOpen(false)}
+				title={drawerTitle}
+				items={drawerItems}
+				type={drawerType}
+			/>
 		</div>
 	);
 }

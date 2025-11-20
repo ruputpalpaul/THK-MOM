@@ -8,6 +8,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Factory, Warehouse, Package, ArrowRightCircle, Activity, Wrench } from 'lucide-react';
 import { FABRICATION_CATEGORIES } from './FabricationDashboard';
 
+import { DrillDownDrawer, DrillDownItem } from './DrillDownDrawer';
+
 type ProductionArea = 'fabrication' | 'green-room' | 'shipping';
 
 interface AreaSummary {
@@ -19,6 +21,10 @@ interface AreaSummary {
   downCount: number;
   additionalStat: string;
   highlight: string;
+  // Drill-down data
+  additionalStatItems: DrillDownItem[];
+  additionalStatType: 'machine' | 'work-order' | 'eco';
+  additionalStatTitle: string;
 }
 
 interface Props {
@@ -32,6 +38,19 @@ export function ProductionOverviewDashboard({ onSelectArea }: Props) {
   const [machines, setMachines] = useState<Machine[]>([]);
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [shippingOrders, setShippingOrders] = useState<ShippingOrder[]>([]);
+
+  // Drill-down state
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerTitle, setDrawerTitle] = useState('');
+  const [drawerItems, setDrawerItems] = useState<DrillDownItem[]>([]);
+  const [drawerType, setDrawerType] = useState<'machine' | 'work-order' | 'eco'>('machine');
+
+  const openDrawer = (title: string, items: DrillDownItem[], type: 'machine' | 'work-order' | 'eco') => {
+    setDrawerTitle(title);
+    setDrawerItems(items);
+    setDrawerType(type);
+    setDrawerOpen(true);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -85,7 +104,7 @@ export function ProductionOverviewDashboard({ onSelectArea }: Props) {
       const downCount = areaMachines.filter(m => m.status === 'down' || m.status === 'maintenance').length;
 
       if (area === 'fabrication') {
-        const outstanding = workOrders.filter(wo => wo.status !== 'completed' && buckets.fabrication.some(m => m.id === wo.machineId)).length;
+        const outstandingWOs = workOrders.filter(wo => wo.status !== 'completed' && buckets.fabrication.some(m => m.id === wo.machineId));
         return {
           title: 'Fabrication',
           description: 'Machining, molding, grinding, and fabrication assets.',
@@ -93,13 +112,16 @@ export function ProductionOverviewDashboard({ onSelectArea }: Props) {
           machines: areaMachines,
           activeCount,
           downCount,
-          additionalStat: `${outstanding} open work orders`,
+          additionalStat: `${outstandingWOs.length} open work orders`,
           highlight: `${Math.round((activeCount / Math.max(areaMachines.length, 1)) * 100)}% uptime`,
+          additionalStatItems: outstandingWOs,
+          additionalStatType: 'work-order',
+          additionalStatTitle: 'Fabrication Work Orders',
         };
       }
 
       if (area === 'green-room') {
-        const ecoCount = workOrders.filter(wo => buckets['green-room'].some(m => m.id === wo.machineId) && wo.type === 'PM').length;
+        const ecoJobs = workOrders.filter(wo => buckets['green-room'].some(m => m.id === wo.machineId) && wo.type === 'PM');
         return {
           title: 'Green Room',
           description: 'Assembly lines, retainers, and measurement stations.',
@@ -107,12 +129,20 @@ export function ProductionOverviewDashboard({ onSelectArea }: Props) {
           machines: areaMachines,
           activeCount,
           downCount,
-          additionalStat: `${ecoCount} preventative jobs in progress`,
+          additionalStat: `${ecoJobs.length} preventative jobs in progress`,
           highlight: `${areaMachines.length} machines`,
+          additionalStatItems: ecoJobs,
+          additionalStatType: 'work-order',
+          additionalStatTitle: 'Green Room PM Jobs',
         };
       }
 
-      const pendingOrders = shippingOrders.filter(order => order.status !== 'shipped').length;
+      const pendingOrders = shippingOrders.filter(order => order.status !== 'shipped');
+      // Map ShippingOrder to something DrillDownDrawer can handle or just show machines for now if types don't match
+      // Since DrillDownDrawer only supports Machine | WorkOrder | ECO, we'll show the machines in this area for now
+      // Or we could extend DrillDownDrawer. For now, let's show the machines that are 'attention' needed.
+      const attentionMachines = areaMachines.filter(m => m.status !== 'active');
+
       return {
         title: 'Shipping',
         description: 'Wrap, pack, forklifts, and outbound logistics.',
@@ -120,8 +150,11 @@ export function ProductionOverviewDashboard({ onSelectArea }: Props) {
         machines: areaMachines,
         activeCount,
         downCount,
-        additionalStat: `${pendingOrders} open shipping orders`,
+        additionalStat: `${pendingOrders.length} open shipping orders`,
         highlight: `${downCount} machines attention`,
+        additionalStatItems: attentionMachines,
+        additionalStatType: 'machine',
+        additionalStatTitle: 'Shipping Machines Needing Attention',
       };
     };
 
@@ -216,21 +249,35 @@ export function ProductionOverviewDashboard({ onSelectArea }: Props) {
                 </div>
 
                 <div className="grid grid-cols-3 gap-3 text-sm">
-                  <div className="p-3 bg-muted rounded-md">
+                  <div
+                    className="p-3 bg-muted rounded-md cursor-pointer hover:bg-muted/80 transition-colors"
+                    onClick={() => openDrawer(`${summary.title} Machines`, summary.machines, 'machine')}
+                  >
                     <span className="text-xs text-muted-foreground block">Machines</span>
                     <span className="text-base font-semibold">{summary.machines.length}</span>
                   </div>
-                  <div className="p-3 bg-muted rounded-md">
+                  <div
+                    className="p-3 bg-muted rounded-md cursor-pointer hover:bg-muted/80 transition-colors"
+                    onClick={() => openDrawer(`${summary.title} - Active`, summary.machines.filter(m => m.status === 'active'), 'machine')}
+                  >
                     <span className="text-xs text-muted-foreground block">Active</span>
                     <span className="text-base font-semibold">{summary.activeCount}</span>
                   </div>
-                  <div className="p-3 bg-muted rounded-md">
+                  <div
+                    className="p-3 bg-muted rounded-md cursor-pointer hover:bg-muted/80 transition-colors"
+                    onClick={() => openDrawer(`${summary.title} - Down/Maint`, summary.machines.filter(m => m.status !== 'active'), 'machine')}
+                  >
                     <span className="text-xs text-muted-foreground block">Down / Maint.</span>
                     <span className="text-base font-semibold">{summary.downCount}</span>
                   </div>
                 </div>
 
-                <p className="text-xs text-muted-foreground">{summary.additionalStat}</p>
+                <p
+                  className="text-xs text-muted-foreground cursor-pointer hover:underline"
+                  onClick={() => openDrawer(summary.additionalStatTitle, summary.additionalStatItems, summary.additionalStatType)}
+                >
+                  {summary.additionalStat}
+                </p>
 
                 <div className="flex items-center justify-between">
                   <Button
@@ -247,6 +294,13 @@ export function ProductionOverviewDashboard({ onSelectArea }: Props) {
           })}
         </section>
       </div>
+      <DrillDownDrawer
+        isOpen={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        title={drawerTitle}
+        items={drawerItems}
+        type={drawerType}
+      />
     </div>
   );
 }

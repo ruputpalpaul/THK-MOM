@@ -33,14 +33,32 @@ const AREA_CAPABILITIES: Record<PlantAreaKey, Capability> = {
   'tool-life': 'view:analytics',
 };
 const MACHINE_FILTER_AREAS: PlantAreaKey[] = ['fabrication', 'green-room'];
-const NAV_ITEMS: Array<{ area: PlantAreaKey; label: string; icon: LucideIcon }> = [
-  { area: 'home', label: 'Home', icon: HomeIcon },
-  { area: 'production', label: 'Production', icon: Layers },
-  { area: 'green-room', label: 'Green Room', icon: Factory },
-  { area: 'fabrication', label: 'Fabrication', icon: Factory },
-  { area: 'shipping', label: 'Shipping', icon: Package },
-  { area: 'machines', label: 'Machine Planner', icon: Factory },
-  { area: 'tool-life', label: 'Tool Life', icon: Gauge },
+type NavGroup = {
+  title: string;
+  items: Array<{ area: PlantAreaKey; label: string; icon: LucideIcon }>;
+};
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    title: 'Overview',
+    items: [{ area: 'home', label: 'Home', icon: HomeIcon }],
+  },
+  {
+    title: 'Plant Floor',
+    items: [
+      { area: 'production', label: 'Production', icon: Layers },
+      { area: 'fabrication', label: 'Fabrication', icon: Factory },
+      { area: 'green-room', label: 'Green Room', icon: Factory },
+      { area: 'shipping', label: 'Shipping', icon: Package },
+    ],
+  },
+  {
+    title: 'Management',
+    items: [
+      { area: 'machines', label: 'Machine Planner', icon: Factory },
+      { area: 'tool-life', label: 'Tool Life', icon: Gauge },
+    ],
+  },
 ];
 
 export default function App() {
@@ -217,7 +235,7 @@ export default function App() {
   return (
     <div className="min-h-screen max-w-full bg-background flex flex-col">
       {/* Top Navigation Bar - Sticky */}
-  <header className="sticky top-0 z-50 border-b border-border bg-background px-4 py-3 w-full">
+      <header className="sticky top-0 z-50 border-b border-border bg-background px-4 py-3 w-full">
         <div className="flex items-center gap-4">
           {/* Hamburger Menu Button + Sheet Navigation */}
           <Sheet open={navOpen} onOpenChange={setNavOpen}>
@@ -234,26 +252,43 @@ export default function App() {
                 <SheetTitle>Plant Areas</SheetTitle>
               </SheetHeader>
               <nav className="px-2 py-1">
-                <ul className="space-y-1">
-                  {NAV_ITEMS.filter(item => allowedAreas.includes(item.area)).map(item => {
-                    const Icon = item.icon;
+                <div className="space-y-4">
+                  {NAV_GROUPS.map((group, groupIndex) => {
+                    const visibleItems = group.items.filter(item => allowedAreas.includes(item.area));
+                    if (visibleItems.length === 0) return null;
+
                     return (
-                      <li key={item.area}>
-                        <Button
-                          variant={area === item.area ? 'secondary' : 'ghost'}
-                          className="w-full justify-start gap-2"
-                          onClick={() => navigateToArea(item.area)}
-                        >
-                          <Icon className="w-4 h-4" /> {item.label}
-                        </Button>
-                      </li>
+                      <div key={group.title} className="space-y-1">
+                        {group.title !== 'Overview' && (
+                          <h4 className="px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                            {group.title}
+                          </h4>
+                        )}
+                        <ul className="space-y-1">
+                          {visibleItems.map(item => {
+                            const Icon = item.icon;
+                            return (
+                              <li key={item.area}>
+                                <Button
+                                  variant={area === item.area ? 'secondary' : 'ghost'}
+                                  className="w-full justify-start gap-2"
+                                  onClick={() => navigateToArea(item.area)}
+                                >
+                                  <Icon className="w-4 h-4" /> {item.label}
+                                </Button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                        {groupIndex < NAV_GROUPS.length - 1 && <div className="my-2 border-t border-border/50" />}
+                      </div>
                     );
                   })}
-                </ul>
+                </div>
               </nav>
             </SheetContent>
           </Sheet>
-          
+
           {/* App Title */}
           <div className="flex-1">
             <h1 className="text-lg font-semibold text-foreground">THK-MOM</h1>
@@ -261,7 +296,7 @@ export default function App() {
               Manufacturing Overview Model • {AREA_LABELS[area]}
             </p>
           </div>
-          
+
           {/* Quick Actions / User Menu */}
           <div className="flex items-center gap-4">
             <div className="flex gap-2">
@@ -333,8 +368,8 @@ export default function App() {
         <div className="flex-1 w-full">
           {/* Header */}
           <AnimatePresence mode="wait">
-  {!selectedMachineDetails && !selectedECODetails && !selectedWorkOrderDetails && !selectedShippingOrder && (
-              <motion.header 
+            {!selectedMachineDetails && !selectedECODetails && !selectedWorkOrderDetails && !selectedShippingOrder && (
+              <motion.header
                 key="dashboard-header"
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -345,12 +380,12 @@ export default function App() {
                 <div className="p-4 sm:p-6 space-y-4 w-full max-w-full">
                   {/* Title */}
                   <div>
-        <h1 className="text-2xl font-bold text-foreground">{AREA_LABELS[area]}</h1>
+                    <h1 className="text-2xl font-bold text-foreground">{AREA_LABELS[area]}</h1>
                     <p className="text-muted-foreground">Manufacturing Overview Model</p>
                   </div>
 
                   {/* Global Search */}
-                  <GlobalSearch 
+                  <GlobalSearch
                     onMachineSelect={setSelectedMachineDetails}
                     onECOSelect={setSelectedECODetails}
                     onWorkOrderSelect={setSelectedWorkOrderDetails}
@@ -371,7 +406,7 @@ export default function App() {
                   initial={{ x: '100%', opacity: 0 }}
                   animate={{ x: 0, opacity: 1 }}
                   exit={{ x: '100%', opacity: 0 }}
-                  transition={{ 
+                  transition={{
                     type: 'spring',
                     stiffness: 300,
                     damping: 30,
@@ -379,7 +414,7 @@ export default function App() {
                   }}
                   className="min-h-full"
                 >
-                  <MachineDetailsPage 
+                  <MachineDetailsPage
                     machine={selectedMachineDetails}
                     onBack={() => {
                       setSelectedMachineDetails(null);
@@ -393,7 +428,7 @@ export default function App() {
                   initial={{ x: '100%', opacity: 0 }}
                   animate={{ x: 0, opacity: 1 }}
                   exit={{ x: '100%', opacity: 0 }}
-                  transition={{ 
+                  transition={{
                     type: 'spring',
                     stiffness: 300,
                     damping: 30,
@@ -401,7 +436,7 @@ export default function App() {
                   }}
                   className="min-h-full"
                 >
-                  <ECODetailsPage 
+                  <ECODetailsPage
                     eco={selectedECODetails}
                     workOrders={workOrders}
                     onBack={() => {
@@ -419,7 +454,7 @@ export default function App() {
                   initial={{ x: '100%', opacity: 0 }}
                   animate={{ x: 0, opacity: 1 }}
                   exit={{ x: '100%', opacity: 0 }}
-                  transition={{ 
+                  transition={{
                     type: 'spring',
                     stiffness: 300,
                     damping: 30,
@@ -427,7 +462,7 @@ export default function App() {
                   }}
                   className="min-h-full"
                 >
-                  <WorkOrderDetailsPage 
+                  <WorkOrderDetailsPage
                     workOrder={selectedWorkOrderDetails}
                     onBack={() => {
                       setSelectedWorkOrderDetails(null);
@@ -440,7 +475,7 @@ export default function App() {
                   initial={{ x: '100%', opacity: 0 }}
                   animate={{ x: 0, opacity: 1 }}
                   exit={{ x: '100%', opacity: 0 }}
-                  transition={{ 
+                  transition={{
                     type: 'spring',
                     stiffness: 300,
                     damping: 30,
@@ -459,7 +494,7 @@ export default function App() {
                   initial={{ x: '-20%', opacity: 0 }}
                   animate={{ x: 0, opacity: 1 }}
                   exit={{ x: '-20%', opacity: 0 }}
-                  transition={{ 
+                  transition={{
                     type: 'spring',
                     stiffness: 300,
                     damping: 30,
@@ -494,7 +529,7 @@ export default function App() {
                       onMachineFilterChange={handleMachineFilterChange}
                     />
                   ) : area === 'shipping' ? (
-                    <ShippingDashboard 
+                    <ShippingDashboard
                       onViewOrder={(o) => setSelectedShippingOrder(o)}
                       onMachineSelect={(machine) => {
                         setSelectedSidebarMachine(machine);
@@ -506,7 +541,7 @@ export default function App() {
                   ) : area === 'tool-life' ? (
                     <ToolLifeEstimationPage />
                   ) : (
-                    <GreenRoomDashboard 
+                    <GreenRoomDashboard
                       selectedMachine={selectedSidebarMachine}
                       onMachineSelect={(machine) => {
                         setSelectedSidebarMachine(machine);
@@ -537,7 +572,7 @@ export default function App() {
       </main>
 
       {/* Dialogs */}
-      <UploadDocumentDialog 
+      <UploadDocumentDialog
         open={uploadDialogOpen}
         onOpenChange={(open) => {
           setUploadDialogOpen(open);
@@ -549,17 +584,17 @@ export default function App() {
         prefilledType={prefilledBackupMachine ? 'Program Backup' : undefined}
         allowedMachineIds={area === 'fabrication' ? fabricationMachineIds : undefined}
       />
-      <AddNoteDialog 
+      <AddNoteDialog
         open={noteDialogOpen}
         onOpenChange={setNoteDialogOpen}
         allowedMachineIds={area === 'fabrication' ? fabricationMachineIds : undefined}
       />
-      <LogEventDialog 
+      <LogEventDialog
         open={eventDialogOpen}
         onOpenChange={setEventDialogOpen}
         allowedMachineIds={area === 'fabrication' ? fabricationMachineIds : undefined}
       />
-      <CreateWorkOrderDialog 
+      <CreateWorkOrderDialog
         open={workOrderDialogOpen}
         onOpenChange={(open) => {
           setWorkOrderDialogOpen(open);
@@ -573,7 +608,7 @@ export default function App() {
       />
 
       {/* Create ECO Dialog */}
-      <CreateECODialog 
+      <CreateECODialog
         open={ecoDialogOpen}
         onOpenChange={setEcoDialogOpen}
         prefilledMachine={null}
@@ -595,9 +630,9 @@ export default function App() {
             setUploadDialogOpen(true);
           }
         }}
-  onAddNote={() => setNoteDialogOpen(true)}
-  onLogEvent={() => setEventDialogOpen(true)}
-  onCreateWorkOrder={() => setWorkOrderDialogOpen(true)}
+        onAddNote={() => setNoteDialogOpen(true)}
+        onLogEvent={() => setEventDialogOpen(true)}
+        onCreateWorkOrder={() => setWorkOrderDialogOpen(true)}
       />
 
       {/* Toast Notifications */}
