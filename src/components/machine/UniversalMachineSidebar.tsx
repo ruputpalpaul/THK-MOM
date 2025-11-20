@@ -271,7 +271,7 @@ export function UniversalMachineSidebar({
                 <div className="flex items-center justify-between">
                   <div className="text-sm">{andonReason} help requested</div>
                   <Badge variant="secondary" className="flex items-center gap-1">
-                    <Timer className="w-3 h-3" />
+                    <Timer className="w-4 h-4" />
                     <AndonTimer start={andonStart} />
                   </Badge>
                 </div>
@@ -340,7 +340,7 @@ export function UniversalMachineSidebar({
                         <p className="text-xs text-muted-foreground">{doc.uploadDate}</p>
                       </div>
                       <Button variant="ghost" size="sm">
-                        <Download className="w-3 h-3" />
+                        <Download className="w-4 h-4" />
                       </Button>
                     </div>
                   ))}

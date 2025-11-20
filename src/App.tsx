@@ -274,7 +274,7 @@ export default function App() {
                                   className="w-full justify-start gap-2"
                                   onClick={() => navigateToArea(item.area)}
                                 >
-                                  <Icon className="w-4 h-4" /> {item.label}
+                                  <Icon className="w-5 h-5" /> {item.label}
                                 </Button>
                               </li>
                             );
